@@ -71,6 +71,29 @@
    ]
   },
   {
+   "name": "spring-form-converter-map-payloads",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of ab8de8ec4b00",
+   "commit": "abc3cfc7be0ef6dc051e26876b635c1a72ae1ae2",
+   "gold_commit": "ab8de8ec4b004e80979af6e4391e28a8a5da4f8e",
+   "gradle": "9.4.1",
+   "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-03-26T15:08:58+01:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
+   "isolated": true,
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
    "name": "spring-jsonl-media-type-support",
    "display_name": "Spring Framework",
    "language": "java",
@@ -129,29 +152,6 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2025-11-10T09:57:06+01:00",
-   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
-   "isolated": true,
-   "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
-    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
-   },
-   "env_from_caller": [
-    "JAVA_HOME"
-   ]
-  },
-  {
-   "name": "spring-fn-request-bind-pathvars-headers",
-   "display_name": "Spring Framework",
-   "language": "java",
-   "language_name": "Java",
-   "url": "https://github.com/spring-projects/spring-framework.git",
-   "ref": "parent of a9a404266c25",
-   "commit": "b29f4ed37edf0da0f41dc19c4ac56ba0d445fca6",
-   "gold_commit": "a9a404266c25a82b0f3a4286053f69ce0c8fb008",
-   "gradle": "9.2.1",
-   "java_toolchain": "25",
-   "work_name": "spring-framework",
-   "parent_date": "2025-11-26T12:30:48Z",
    "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
    "isolated": true,
    "session_env": {
@@ -536,8 +536,8 @@
     "timed_out": false,
     "commit": "5e1e150f2bb3475a5a8e1147507b86716e61e3a5",
     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-core:compileJava :spring-core:compileTestJava :spring-expression:compileJava :spring-expression:compileTestJava :spring-expression:test --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests",
-    "seconds_parent": 36.87,
-    "checked_at": "2026-11-24T02:58:08Z",
+    "seconds_parent": 74.34,
+    "checked_at": "2026-11-24T03:43:49Z",
     "sandboxed": true,
     "test_overlay": [
      "spring-expression/src/test/java/org/springframework/expression/spel/support/SimpleEvaluationContextTests.java"
@@ -546,13 +546,13 @@
     "gold_commit": "d41495720cbabe30844e65c12765eacf806d2653",
     "gold_returncode": 0,
     "gold_timed_out": false,
-    "seconds_gold": 16.38,
+    "seconds_gold": 25.05,
     "gold_runs": 2,
     "gold_passes": 2,
     "gold_failure": null,
     "seconds_gold_runs": [
-     16.38,
-     7.93
+     25.05,
+     12.25
     ]
    }
   },
@@ -811,8 +811,8 @@
     "timed_out": false,
     "commit": "33988a4621349b8522e94b2eadde4f28a2844065",
     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-beans:compileJava :spring-beans:compileTestJava :spring-context:compileJava :spring-context:compileTestJava :spring-beans:test --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
-    "seconds_parent": 40.85,
-    "checked_at": "2026-11-24T03:04:14Z",
+    "seconds_parent": 74.27,
+    "checked_at": "2026-11-24T03:53:10Z",
     "sandboxed": true,
     "test_overlay": [
      "spring-beans/src/test/java/org/springframework/beans/AbstractPropertyAccessorTests.java",
@@ -825,14 +825,85 @@
     "gold_commit": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
     "gold_returncode": 0,
     "gold_timed_out": false,
-    "seconds_gold": 24.28,
+    "seconds_gold": 29.32,
     "gold_runs": 2,
     "gold_passes": 2,
     "gold_failure": null,
     "seconds_gold_runs": [
-     24.28,
-     8.19
+     29.32,
+     9.66
     ]
+   }
+  },
+  {
+   "id": "form-converter-map-payloads",
+   "repo": "spring-form-converter-map-payloads",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "FormHttpMessageConverter only reads and writes URL-encoded forms as a MultiValueMap, so a plain Map<String, String> (for example one created with Map.of(...)) cannot be used as a form body. FormHttpMessageConverter should support any Map for reading and writing application/x-www-form-urlencoded content. To allow this, the converter is declared as a SmartHttpMessageConverter<Object> instead of being typed to MultiValueMap<String, String>: read(...) returns Object, and write(...) accepts an Object that must be a Map. When the target type is not a MultiValueMap, reading returns a single-value Map that keeps only the first value for each key. canRead and canWrite accept Map, MultiValueMap and their implementations, with or without generics. Both methods only match a media type that one of the supported media types includes, so canWrite no longer accepts a wildcard such as */*. Writing a plain Map serializes each entry as name=value in the map's iteration order.",
+   "rationale": "The commit widens FormHttpMessageConverter from MultiValueMap<String,String> to Object so Map payloads can be read and written, and makes canWrite use includes() like canRead. The primary file is the converter. Dependents are the call sites that now need a cast on read(...): FormContentFilter (spring-web), ContentRequestMatchers and AbstractMockHttpServletRequestBuilder (spring-test), plus the message-converters AsciiDoc page.",
+   "source": {
+    "commit": "ab8de8ec4b004e80979af6e4391e28a8a5da4f8e",
+    "subject": "Support Map payloads in FormHttpMessageConverter",
+    "date": "2026-03-26",
+    "issue": "gh-36408"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-test/src/main/java/org/springframework/test/web/client/match/ContentRequestMatchers.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-test/src/main/java/org/springframework/test/web/servlet/request/AbstractMockHttpServletRequestBuilder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/converter/FormHttpMessageConverter.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/filter/FormContentFilter.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/converter/FormHttpMessageConverter.java"
+   ],
+   "test_command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-test:compileJava :spring-test:compileTestJava :spring-web:compileJava :spring-web:compileTestJava :spring-web:test --tests org.springframework.http.converter.FormHttpMessageConverterTests",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 1800,
+   "strata": {
+    "files": 6,
+    "files_by_kind": {
+     "code": 4,
+     "tests": 1,
+     "docs": 1
+    },
+    "code_modules": 2,
+    "comment_only": 0,
+    "modules": [
+     "framework-docs",
+     "spring-test",
+     "spring-web"
+    ],
+    "docs": true,
+    "size": "M"
    }
   },
   {
@@ -1151,8 +1222,8 @@
     "timed_out": false,
     "commit": "771517dc36735842a129ea3a51738f0b6fcce7bd",
     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava :spring-context:test --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --tests org.springframework.core.retry.MaxRetriesRetryPolicyTests --tests org.springframework.core.retry.RetryPolicyTests --tests org.springframework.core.retry.RetryTemplateTests",
-    "seconds_parent": 40.86,
-    "checked_at": "2026-11-24T03:08:22Z",
+    "seconds_parent": 75.99,
+    "checked_at": "2026-11-24T03:59:31Z",
     "sandboxed": true,
     "test_overlay": [
      "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
@@ -1166,91 +1237,14 @@
     "gold_commit": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
     "gold_returncode": 0,
     "gold_timed_out": false,
-    "seconds_gold": 34.78,
+    "seconds_gold": 44.6,
     "gold_runs": 2,
     "gold_passes": 2,
     "gold_failure": null,
     "seconds_gold_runs": [
-     34.78,
-     10.39
+     44.6,
+     11.78
     ]
-   }
-  },
-  {
-   "id": "fn-request-bind-pathvars-headers",
-   "repo": "spring-fn-request-bind-pathvars-headers",
-   "type": "edit",
-   "answer_kind": "diff",
-   "question": "In functional endpoints, ServerRequest.bind(Class) only binds request parameters onto the target object. A handler for a route such as \"/request/{var}\" therefore cannot bind the URI variable var, or a request header, the way data binding for annotated controllers can. Data binding through ServerRequest.bind should also bind URI path variables and request headers, consistent with the extended data binders that annotated controllers use. This applies to both WebFlux and Spring MVC functional endpoints.",
-   "rationale": "The commit makes the functional DefaultServerRequest.bind use ExtendedWebExchangeDataBinder (WebFlux) and ExtendedServletRequestDataBinder (MVC) instead of the plain binders. The WebFlux DefaultServerRequest is primary because the issue is reported against WebFlux. Dependents are the MVC DefaultServerRequest, the new single-argument constructor in ExtendedWebExchangeDataBinder, and the webflux-functional and webmvc-functional AsciiDoc pages.",
-   "source": {
-    "commit": "a9a404266c25a82b0f3a4286053f69ce0c8fb008",
-    "subject": "Data binding from pathvars and headers in fn handlers",
-    "date": "2025-11-26",
-    "issue": "gh-35800"
-   },
-   "gold_files": [
-    {
-     "path": "framework-docs/modules/ROOT/pages/web/webflux-functional.adoc",
-     "status": "M"
-    },
-    {
-     "path": "framework-docs/modules/ROOT/pages/web/webmvc-functional.adoc",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/function/server/DefaultServerRequest.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ExtendedWebExchangeDataBinder.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/function/server/BindingFunctionIntegrationTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/function/DefaultServerRequest.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/function/DefaultServerRequestTests.java",
-     "status": "M"
-    }
-   ],
-   "primary_files": [
-    "spring-webflux/src/main/java/org/springframework/web/reactive/function/server/DefaultServerRequest.java"
-   ],
-   "test_command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava :spring-webflux:test --tests org.springframework.web.reactive.function.server.BindingFunctionIntegrationTests :spring-webmvc:test --tests org.springframework.web.servlet.function.DefaultServerRequestTests",
-   "test_overlay": [
-    "spring-webflux/src/test/java/org/springframework/web/reactive/function/server/BindingFunctionIntegrationTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/function/DefaultServerRequestTests.java"
-   ],
-   "allowed_commands": [
-    {
-     "prefix": "./gradlew",
-     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
-    }
-   ],
-   "weak_test": "A passing solution may skip the new ExtendedWebExchangeDataBinder constructor (harmless). More important: the tests bind only request headers; binding URI path variables, the case the question leads with, is not tested in either stack. Not enforced: ExtendedWebExchangeDataBinder.java.",
-   "test_timeout_s": 1800,
-   "strata": {
-    "files": 7,
-    "files_by_kind": {
-     "code": 3,
-     "tests": 2,
-     "docs": 2
-    },
-    "code_modules": 2,
-    "comment_only": 0,
-    "modules": [
-     "framework-docs",
-     "spring-webflux",
-     "spring-webmvc"
-    ],
-    "docs": true,
-    "size": "M"
    }
   },
   {
@@ -1331,8 +1325,8 @@
     "timed_out": false,
     "commit": "223a5562bebba968a4b948cc6cd97a372d3fc6bb",
     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-jdbc:compileJava :spring-jdbc:compileTestJava :spring-jdbc:test --tests org.springframework.jdbc.core.simple.JdbcClientIndexedParameterTests --tests org.springframework.jdbc.core.simple.JdbcClientIntegrationTests --tests org.springframework.jdbc.core.simple.JdbcClientNamedParameterTests",
-    "seconds_parent": 44.4,
-    "checked_at": "2026-11-24T03:06:54Z",
+    "seconds_parent": 77.69,
+    "checked_at": "2026-11-24T03:57:15Z",
     "sandboxed": true,
     "test_overlay": [
      "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
@@ -1343,13 +1337,13 @@
     "gold_commit": "833ab4d48fdaf64f7b234f6dac76d4cced14390c",
     "gold_returncode": 0,
     "gold_timed_out": false,
-    "seconds_gold": 13.91,
+    "seconds_gold": 16.81,
     "gold_runs": 2,
     "gold_passes": 2,
     "gold_failure": null,
     "seconds_gold_runs": [
-     13.91,
-     8.77
+     16.81,
+     10.18
     ]
    }
   },
@@ -1418,8 +1412,8 @@
     "timed_out": false,
     "commit": "f4ee120a423c069ddfc94076cc49e02ec9d797d5",
     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-webmvc:compileJava :spring-webmvc:compileTestJava :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests",
-    "seconds_parent": 69.68,
-    "checked_at": "2026-11-24T02:59:44Z",
+    "seconds_parent": 116.19,
+    "checked_at": "2026-11-24T03:46:15Z",
     "sandboxed": true,
     "test_overlay": [
      "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java"
@@ -1428,13 +1422,13 @@
     "gold_commit": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
     "gold_returncode": 0,
     "gold_timed_out": false,
-    "seconds_gold": 14.41,
+    "seconds_gold": 16.59,
     "gold_runs": 2,
     "gold_passes": 2,
     "gold_failure": null,
     "seconds_gold_runs": [
-     14.41,
-     8.76
+     16.59,
+     10.43
     ]
    }
   },
@@ -1574,8 +1568,8 @@
     "timed_out": false,
     "commit": "b6fdd4317e8086b02ecb8a5c7d62e5397d0ddda0",
     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-web:test --tests org.springframework.web.accept.MappingContentNegotiationStrategyTests :spring-webflux:test --tests org.springframework.web.reactive.accept.ParameterContentTypeResolverTests",
-    "seconds_parent": 58.58,
-    "checked_at": "2026-11-24T03:01:05Z",
+    "seconds_parent": 98.6,
+    "checked_at": "2026-11-24T03:48:21Z",
     "sandboxed": true,
     "test_overlay": [
      "spring-web/src/test/java/org/springframework/web/accept/MappingContentNegotiationStrategyTests.java",
@@ -1585,13 +1579,13 @@
     "gold_commit": "7fbdbd6eb7665be6a66562d26b26ffcfb600ee32",
     "gold_returncode": 0,
     "gold_timed_out": false,
-    "seconds_gold": 11.8,
+    "seconds_gold": 14.63,
     "gold_runs": 2,
     "gold_passes": 2,
     "gold_failure": null,
     "seconds_gold_runs": [
-     11.8,
-     8.57
+     14.63,
+     9.59
     ]
    }
   },
@@ -1924,8 +1918,8 @@
     "timed_out": false,
     "commit": "ee19b96ee9a6ba9264194268e28ebaf9705ff59d",
     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-core:compileJava :spring-core:compileTestJava :spring-web:compileJava :spring-web:compileTestJava :spring-core:test --tests org.springframework.util.MimeTypeTests :spring-web:test --tests org.springframework.http.MediaTypeTests",
-    "seconds_parent": 49.3,
-    "checked_at": "2026-11-24T03:05:44Z",
+    "seconds_parent": 85.84,
+    "checked_at": "2026-11-24T03:55:27Z",
     "sandboxed": true,
     "test_overlay": [
      "spring-core/src/test/java/org/springframework/util/MimeTypeTests.java",
@@ -1935,13 +1929,13 @@
     "gold_commit": "2028eb3694babca20cbcb95a966b50b3e6fe71ca",
     "gold_returncode": 0,
     "gold_timed_out": false,
-    "seconds_gold": 29.95,
+    "seconds_gold": 38.0,
     "gold_runs": 2,
     "gold_passes": 2,
     "gold_failure": null,
     "seconds_gold_runs": [
-     29.95,
-     8.11
+     38.0,
+     9.41
     ]
    }
   },
@@ -2166,8 +2160,8 @@
     "timed_out": false,
     "commit": "cd67010518675a67c15d8e3cd5245e43e3f16835",
     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava :spring-web:test --tests org.springframework.web.accept.StandardApiVersionDeprecationHandlerTests :spring-webflux:test --tests org.springframework.web.reactive.accept.StandardApiVersionDeprecationHandlerTests",
-    "seconds_parent": 67.56,
-    "checked_at": "2026-11-24T03:02:58Z",
+    "seconds_parent": 114.57,
+    "checked_at": "2026-11-24T03:51:14Z",
     "sandboxed": true,
     "test_overlay": [
      "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
@@ -2177,13 +2171,13 @@
     "gold_commit": "b128f59714b071e9b4d8a1ae9cdc63f3ff62251f",
     "gold_returncode": 0,
     "gold_timed_out": false,
-    "seconds_gold": 34.35,
+    "seconds_gold": 44.83,
     "gold_runs": 2,
     "gold_passes": 2,
     "gold_failure": null,
     "seconds_gold_runs": [
-     34.35,
-     8.35
+     44.83,
+     9.87
     ]
    }
   },

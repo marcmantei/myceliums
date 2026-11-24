@@ -30,15 +30,15 @@ Threat model: a cooperative agent that has been told to work in its checkout,
 audited per session. Not covered: Claude Code's sandbox cannot close macOS's
 security services (lookups of ``com.apple.SecurityServer`` and
 ``com.apple.securityd.xpc`` succeed in 2.1.331; its settings only add services),
-the keychain files are closed;  ``claude``, the myceliums server and the
+the keychain files are closed; ``claude``, the myceliums server and the
 hooks run with the user's access; the names of files outside may stay visible;
-Gradle's home is shared and writable, so a session could leave something for a
-later one (not init scripts, settings or the wrapper: those are closed); Spring's
-commits are public and may be in the model's training data.
+a listener that a test opens on all interfaces could be reached from the local
+network while it runs; Spring's commits are public and may be in the model's training data.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -78,75 +78,82 @@ def protected_roots() -> list[Path]:
     return [r for r in real if not any(o != r and o in r.parents for o in real)]
 
 
-def gradle_home(env: dict) -> Path:
-    return Path(os.path.realpath(env.get("GRADLE_USER_HOME") or Path.home() / ".gradle"))
+def user_gradle_home() -> Path:
+    return Path(os.path.realpath(Path.home() / ".gradle"))
+
+
+def dependency_cache() -> Path:
+    """The frozen copy of the resolved dependencies every build reads
+    (``agent_eval.py gradle-cache``; Gradle's ``GRADLE_RO_DEP_CACHE``). Its path
+    reaches the agent's environment, so it does not name this harness."""
+    return Path(os.path.realpath(os.environ.get("AEVAL_GRADLE_RO") or Path.home() / ".cache" / "gradle-ro"))
+
+
+def freeze_dependencies(src: Path, dst: Path) -> dict:
+    """Copy ``modules-2`` (downloaded artifacts and their metadata, nothing a
+    build produced) without its lock files, as Gradle asks for a read-only cache."""
+    if dst.exists():
+        raise SystemExit(f"{dst} exists; move it away to make a new one")
+    dst.mkdir(parents=True)
+    subprocess.run(["cp", *(["-c"] if sys.platform == "darwin" else []), "-R", str(src / "modules-2"), str(dst / "modules-2")], check=True)
+    for p in [*(dst / "modules-2").rglob("*.lock"), dst / "modules-2" / "gc.properties"]:
+        p.unlink(missing_ok=True)
+    files = sorted((str(p.relative_to(dst)), p.stat().st_size) for p in dst.rglob("*") if p.is_file())
+    return {"files": len(files), "bytes": sum(n for _, n in files),
+            "listing_sha256": hashlib.sha256(json.dumps(files).encode()).hexdigest()}
+
+
+def private_gradle_home(home: Path) -> None:
+    """A Gradle user home of one session (or one grading): the installed
+    distributions as links, everything else made by its own builds. Nothing of
+    another build's output, logs, scans or compiled classes is in it."""
+    if home.exists():
+        return
+    home.mkdir()
+    for d in sorted((user_gradle_home() / "wrapper" / "dists").glob("*/*")):
+        ok = [p.name for p in d.iterdir() if p.name.endswith(".zip.ok")] if d.is_dir() else []
+        if ok:  # the wrapper also needs a lock file of its own next to the marker
+            to = home / "wrapper" / "dists" / d.parent.name / d.name
+            to.mkdir(parents=True)
+            (to / ok[0]).touch()
+            for p in d.iterdir():
+                if p.is_dir():
+                    (to / p.name).symlink_to(p)
 
 
 def never(env: dict) -> list[str]:
-    """Paths and patterns that stay closed inside readable places: secrets of
-    the user's configuration, Gradle's build cache, scans stored by earlier
-    builds and daemon logs (other builds' output)."""
-    g = gradle_home(env)
+    """Paths that stay closed inside readable places."""
     return ([str(Path.home() / n) for n in NEVER]
-            + [f"/private/tmp/claude-{os.getuid()}", f"/tmp/claude-{os.getuid()}"]  # every session's command output
-            + [str(g / "caches" / "build-cache-1")] + earlier_output(env))
+            + [f"/private/tmp/claude-{os.getuid()}", f"/tmp/claude-{os.getuid()}"])  # every session's command output
 
 
-def unwritable(workdir: Path, env: dict) -> list[str]:
+def unwritable(workdir: Path) -> list[str]:
     """What a command may not change although it lies in a writable place:
-    Claude Code's settings in the working copy, the Gradle wrapper, and what
-    would carry code into a later session through Gradle's home."""
+    Claude Code's settings in the working copy and the Gradle wrapper."""
     w = Path(os.path.realpath(workdir))
-    return ([str(w / n) for n in (".claude", ".mcp.json", "gradle/wrapper", "gradlew", "gradlew.bat", ".git/hooks", ".git/config")]
-            + gradle_unwritable(env))
-
-
-def earlier_output(env: dict) -> list[str]:
-    """Files earlier builds left in Gradle's home: stored build scans and daemon
-    logs. File by file: a build fails when it cannot create its own in their
-    directories, and under a pattern Claude Code's sandbox also refuses the
-    metadata of the build's own log, which Gradle 9.2 does not survive."""
-    g = gradle_home(env)
-    return sorted(str(p) for d, pat in (("build-scan-data", "*"), ("daemon", "*.out.log")) if (g / d).is_dir()
-                  for p in (g / d).rglob(pat) if p.is_file())
+    return [str(w / n) for n in (".claude", ".mcp.json", "gradle/wrapper", "gradlew", "gradlew.bat", ".git/hooks", ".git/config")]
 
 
 IPV4 = "-Djava.net.preferIPv4Stack=true"
-# Claude Code passes its sandbox profile as one argument: about 62 kB plus 450 bytes per closed file (measured with 337
-# files, 2.1.331); macOS allows 1 MB for all arguments. Beyond the limit no command would start.
-MAX_CLOSED = 1500
 
 
 def problem(env: dict) -> str | None:
     """Why no isolated session or graded build may start with ``env``."""
-    n = len(earlier_output(env))
-    if n > MAX_CLOSED:
-        return (f"{n} build scans and daemon logs of earlier builds in {gradle_home(env)} (at most {MAX_CLOSED} fit the "
-                "sandbox's profile): move them away")
     java = Path(env.get("JAVA_HOME") or "/nonexistent") / "bin" / "java"
     if java.is_file() and IPV4.encode() not in java.read_bytes()[:4096]:
         return f"JAVA_HOME {env['JAVA_HOME']} is not the copy made by groundtruth/make_jdk_ipv4.py: Gradle's workers would fail"
+    if java.is_file() and not (dependency_cache() / "modules-2").is_dir():
+        return f"no frozen dependencies in {dependency_cache()}: run `agent_eval.py gradle-cache` after the warm-up"
     return None
-
-
-def gradle_unwritable(env: dict) -> list[str]:
-    """What would carry code into a later session through Gradle's home: its
-    init scripts and properties, and the unpacked distributions. The
-    distribution's lock file (``.zip.lck``) must stay writable: the wrapper
-    opens it even when the distribution is complete."""
-    g = gradle_home(env)
-    dists = g / "wrapper" / "dists"
-    installed = sorted(p for d in dists.glob("*/*") for p in d.iterdir() if p.is_dir() or p.name.endswith((".zip", ".ok"))) \
-        if dists.is_dir() else []
-    return [str(g / n) for n in ("init.d", "init.gradle", "init.gradle.kts", "gradle.properties")] + [str(p) for p in installed]
 
 
 def readable(tmp: Path, workdir: Path, env: dict, myc: list[Path]) -> tuple[list[Path], list[Path]]:
     """``(read and write, read only)`` for what a session executes: its working
-    copy, its temporary files, Gradle's home; the JDK; in the arms with
-    myceliums also the binary, the models and this session's index copy."""
-    rw = [workdir, tmp / "t", gradle_home(env)] + ([tmp / "data", tmp / "home"] if myc else [])
-    ro = [tmp / "g"] + [Path(env[k]) for k in ("JAVA_HOME",) if env.get(k)] + ([tmp / "bin"] if myc else []) + list(myc)
+    copy, its temporary files, its Gradle home; the JDK, the installed Gradle
+    distributions and the frozen dependencies; in the arms with myceliums also the binary, the models and this session's index copy."""
+    rw = [workdir, tmp / "t"] + [Path(env[k]) for k in ("GRADLE_USER_HOME",) if env.get(k)] + ([tmp / "data", tmp / "home"] if myc else [])
+    ro = [tmp / "g"] + [Path(env[k]) for k in ("JAVA_HOME", "GRADLE_RO_DEP_CACHE") if env.get(k)] + [
+        user_gradle_home() / "wrapper" / "dists"] + ([tmp / "bin"] if myc else []) + list(myc)
     real = lambda ps: [Path(os.path.realpath(p)) for p in ps]  # noqa: E731
     return real(rw), real(ro)
 
@@ -168,7 +175,7 @@ def session_settings(tmp: Path, workdir: Path, env: dict, myc: list[Path], hook:
             "excludedCommands": [], "enableWeakerNestedSandbox": False, "enableWeakerNetworkIsolation": False,
             "allowAppleEvents": False,
             "filesystem": {"denyRead": closed, "allowRead": [str(p) for p in rw + ro],
-                           "allowWrite": [str(p) for p in rw if p != Path(work)], "denyWrite": unwritable(workdir, env)},
+                           "allowWrite": [str(p) for p in rw if p != Path(work)], "denyWrite": unwritable(workdir)},
             # (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB would also drop the pinned git configuration.)
             "credentials": {"envVars": [{"name": n, "mode": "deny"} for n in SECRET_ENV]},
             "network": {"allowedDomains": [], "deniedDomains": ["*"], "strictAllowlist": True, "allowLocalBinding": True,
@@ -214,7 +221,7 @@ def grading_profile(tmp: Path, workdir: Path, env: dict) -> str:
     """For the test command that grades a session (it runs code the agent
     wrote); no myceliums paths, the same in every arm."""
     rw, ro = readable(tmp, workdir, env, [])
-    return profile(rw, ro, closed=never(env), unwritable=gradle_unwritable(env))
+    return profile(rw, ro, closed=never(env))
 
 
 def sandboxed(cmd: list[str], profile_path: Path) -> list[str]:
@@ -225,8 +232,9 @@ def available() -> bool:
     return sys.platform == "darwin" and os.access(SANDBOX, os.X_OK)
 
 
-def session_environment(tmp: Path) -> dict[str, str]:
-    """Temporary files of this session alone, also the JVM's (macOS's Java takes
+def session_environment(tmp: Path, gradle: str = "gh") -> dict[str, str]:
+    """A Gradle home of its own (``gradle``: another one for the grading, which
+    so does not see what the agent's builds left). Temporary files of this session alone, also the JVM's (macOS's Java takes
     the user's directory whatever ``TMPDIR`` says), and no shell start files.
     Nothing about the login: ``claude`` finds it as always."""
     for d in ("t", "zdotdir", "g"):
@@ -235,7 +243,9 @@ def session_environment(tmp: Path) -> dict[str, str]:
         if Path("/usr/bin/xcrun").exists() else ""
     if git and not (tmp / "g" / "git").exists():  # macOS's /usr/bin/git is a shim that looks around outside first
         (tmp / "g" / "git").symlink_to(git)
-    return {"TMPDIR": str(tmp / "t"), "CLAUDE_CODE_TMPDIR": str(tmp / "t"),
+    private_gradle_home(tmp / gradle)
+    return {"GRADLE_USER_HOME": str(tmp / gradle), "GRADLE_RO_DEP_CACHE": str(dependency_cache()),
+            "TMPDIR": str(tmp / "t"), "CLAUDE_CODE_TMPDIR": str(tmp / "t"),
             "ZDOTDIR": str(tmp / "zdotdir"),
             # IPv4 loopback: a JVM that opens IPv6-mapped sockets (its default) is refused by the sandboxes' loopback
             # rule. JAVA_TOOL_OPTIONS reaches a JVM that Gradle starts; the launcher variable also its worker JVMs.

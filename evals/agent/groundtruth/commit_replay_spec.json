@@ -97,7 +97,8 @@
     "verdict": "ok",
     "comment": "Clean. It names only the primary RequestResponseBodyMethodProcessor, plus the generic phrase 'the framework'. The phrase 'directly as the response body or as the body of a ResponseEntity/HttpEntity' is behavioural scope as a user would put it; it hints at the HttpEntity path but names no class. WebFlux handlers and both adoc pages are left for the agent to find. The tests only drop instance expectations or assert null; no new API. Primary file is correct. The test_command covers all 7 overlay classes. ResourceHttpRequestHandlerIntegrationTests and RequestMappingExceptionHandlingIntegrationTests are integration tests, but they are deterministic."
    },
-   "reserve": true
+   "reserve": true,
+   "drop": "its tests start HTTP servers on 0.0.0.0 (AbstractHttpServer), which the sandbox cannot confine to loopback (RequestMappingExceptionHandlingIntegrationTests); was a reserve"
   },
   {
    "id": "beans-max-nested-path-depth",
@@ -177,7 +178,7 @@
     "verdict": "ok",
     "comment": "The type change to SmartHttpMessageConverter<Object> (read returns Object, write takes Object) is needed: the test calls write(HashMap) and casts read results. It also explains the casts needed in spring-test/FormContentFilter, but it names no dependents. Also stated: canRead/canWrite for Map, MultiValueMap and their subtypes with or without generics; includes() matching, so */* is rejected; a single-value Map for non-MultiValueMap targets; serialization in iteration order (writeFormFromMap relies on the deterministic HashMap order 'name+2=...&name+1=...', which is not flaky). One minor gap: cannotReadToMapsWhenMediaTypeMissing expects canRead(type, null) == false. This follows from 'only match a media type that one of the supported media types includes', because includes(null) is false, and the parent already behaves this way, so it is acceptable."
    },
-   "reserve": true
+   "replaces": "fn-request-bind-pathvars-headers (same size, two modules with code changes, docs; chosen before its precheck ran)"
   },
   {
    "id": "jsonl-media-type-support",
@@ -245,7 +246,8 @@
     "verdict": "ok",
     "comment": "Solvable: the tests now send 'bar' as a header instead of a query parameter and expect it bound. No new public API is needed; the new ExtendedWebExchangeDataBinder(Object) constructor is optional because the (Object, String) constructor exists. 'Both WebFlux and Spring MVC functional endpoints' is a scope phrase from the commit. The test_command covers both overlay classes."
    },
-   "weak_test": "A passing solution may skip the new ExtendedWebExchangeDataBinder constructor (harmless). More important: the tests bind only request headers; binding URI path variables, the case the question leads with, is not tested in either stack. Not enforced: ExtendedWebExchangeDataBinder.java."
+   "weak_test": "A passing solution may skip the new ExtendedWebExchangeDataBinder constructor (harmless). More important: the tests bind only request headers; binding URI path variables, the case the question leads with, is not tested in either stack. Not enforced: ExtendedWebExchangeDataBinder.java.",
+   "drop": "its tests start HTTP servers on 0.0.0.0 (AbstractHttpServer), which the sandbox cannot confine to loopback; replaced by form-converter-map-payloads"
   },
   {
    "id": "retry-match-exception-causes",

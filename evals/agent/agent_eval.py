@@ -419,20 +419,26 @@ def cmd_replay(args) -> int:
     return 1 if differ else 0
 
 
-def _precheck_sandbox(repo: dict):
+def cmd_gradle_cache(args) -> int:
+    """Freeze the resolved dependencies of ~/.gradle for offline builds (#183)."""
+    from aeval import isolation
+    print(json.dumps(isolation.freeze_dependencies(isolation.user_gradle_home() / "caches", isolation.dependency_cache())))
+    return 0
+
+
+def _precheck_sandbox(repo: dict, tmp: Path):
     """The grading sandbox of a session, for a precheck (#183)."""
     from aeval import isolation
     if not isolation.available():
         sys.exit("--sandbox needs macOS's sandbox-exec")
     if problem := isolation.problem(config.repo_env(repo)):
         sys.exit(problem)
-    tmp = Path(tempfile.mkdtemp(dir=config.session_root(repo)))
 
     def make(work: Path):
-        env = {**config.repo_env(repo), **isolation.session_environment(tmp)}
+        env = {**config.repo_env(repo), **isolation.session_environment(tmp, "gg")}
         prof = tmp / "grading.sb"
         prof.write_text(isolation.grading_profile(tmp, work, env))
-        return isolation.sandboxed([], prof), isolation.session_environment(tmp)
+        return isolation.sandboxed([], prof), isolation.session_environment(tmp, "gg")
     return make
 
 
@@ -454,10 +460,13 @@ def cmd_precheck_edit(args) -> int:
         checkout = config.cache_dir() / "repos" / t["repo"]
         repo = repos[t["repo"]]
         gold = config.gold_dir(t["repo"]) if repo.get("gold_commit") else None
+        tmp = Path(tempfile.mkdtemp(dir=config.session_root(repo))) if args.sandbox else None
         rec = editgrade.precheck(t, checkout, scratch, repo["commit"], int(t.get("test_timeout_s", 900)),
                                  gold=gold, env=config.repo_env(repo), gold_commit=repo.get("gold_commit"),
                                  gold_runs=args.gold_runs, log_dir=Path(args.logs) if args.logs else None,
-                                 sandbox=_precheck_sandbox(repo) if args.sandbox else None)
+                                 sandbox=_precheck_sandbox(repo, tmp) if args.sandbox else None)
+        if tmp:
+            config.remove_tree(tmp, config.session_root(repo))
         t["precheck"] = rec
         ok = rec["fails_on_parent"] and rec.get("passes_on_gold", True)
         bad += not ok
@@ -689,6 +698,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("label")
     s.add_argument("--check", action="store_true")
     s.set_defaults(fn=cmd_report)
+
+    s = sub.add_parser("gradle-cache", help="freeze the resolved dependencies of ~/.gradle for the offline builds (#183)")
+    s.set_defaults(fn=cmd_gradle_cache)
 
     s = sub.add_parser("precheck-edit", help="check that each edit task's test command fails on the pinned "
                        "(parent) commit, and record it in the task file (#178)")

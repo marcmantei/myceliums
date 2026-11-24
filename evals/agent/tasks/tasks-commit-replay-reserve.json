@@ -48,29 +48,6 @@
    ]
   },
   {
-   "name": "spring-problemdetail-no-instance-from-path",
-   "display_name": "Spring Framework",
-   "language": "java",
-   "language_name": "Java",
-   "url": "https://github.com/spring-projects/spring-framework.git",
-   "ref": "parent of ac6528854d3f",
-   "commit": "84f085f9c8730448b8f00b3e3ad68c873568ec82",
-   "gold_commit": "ac6528854d3f8947fc9a24d2174d861accac9484",
-   "gradle": "9.8.0",
-   "java_toolchain": "25",
-   "work_name": "spring-framework",
-   "parent_date": "2026-10-06T09:28:43+01:00",
-   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
-   "isolated": true,
-   "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
-    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
-   },
-   "env_from_caller": [
-    "JAVA_HOME"
-   ]
-  },
-  {
    "name": "spring-spel-parser-configuration-builder",
    "display_name": "Spring Framework",
    "language": "java",
@@ -83,29 +60,6 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-08-20T18:17:01+02:00",
-   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
-   "isolated": true,
-   "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
-    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
-   },
-   "env_from_caller": [
-    "JAVA_HOME"
-   ]
-  },
-  {
-   "name": "spring-form-converter-map-payloads",
-   "display_name": "Spring Framework",
-   "language": "java",
-   "language_name": "Java",
-   "url": "https://github.com/spring-projects/spring-framework.git",
-   "ref": "parent of ab8de8ec4b00",
-   "commit": "abc3cfc7be0ef6dc051e26876b635c1a72ae1ae2",
-   "gold_commit": "ab8de8ec4b004e80979af6e4391e28a8a5da4f8e",
-   "gradle": "9.4.1",
-   "java_toolchain": "25",
-   "work_name": "spring-framework",
-   "parent_date": "2026-03-26T15:08:58+01:00",
    "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
    "isolated": true,
    "session_env": {
@@ -382,111 +336,6 @@
    }
   },
   {
-   "id": "problemdetail-no-instance-from-path",
-   "repo": "spring-problemdetail-no-instance-from-path",
-   "type": "edit",
-   "answer_kind": "diff",
-   "question": "When a controller or @ExceptionHandler method returns a ProblemDetail, either directly as the response body or as the body of a ResponseEntity/HttpEntity, the framework sets its instance property to the current request path if the application has not set it. For example, Spring MVC's RequestResponseBodyMethodProcessor does this. RFC 9457 defines instance as a URI reference that identifies the specific occurrence of the problem, not the request URL, so this default is wrong and not useful to clients. The framework should no longer populate instance itself: it stays null unless the application sets it, and a value set by the application is still rendered as-is.",
-   "rationale": "The commit removes the code that defaults ProblemDetail.instance to the request path. The description points at RequestResponseBodyMethodProcessor (Spring MVC, @ResponseBody case). Dependents: HttpEntityMethodProcessor (MVC, ResponseEntity case), WebFlux ResponseBodyResultHandler and ResponseEntityResultHandler, and the RFC 9457 sections in both the MVC and WebFlux reference docs (ann-rest-exceptions.adoc).",
-   "source": {
-    "commit": "ac6528854d3f8947fc9a24d2174d861accac9484",
-    "subject": "No longer set instance field of ProblemDetail",
-    "date": "2026-10-06",
-    "issue": "gh-35969"
-   },
-   "gold_files": [
-    {
-     "path": "framework-docs/modules/ROOT/pages/web/webflux/ann-rest-exceptions.adoc",
-     "status": "M"
-    },
-    {
-     "path": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandler.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandler.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/DispatcherHandlerErrorTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/RequestMappingExceptionHandlingIntegrationTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandlerTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandlerTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessor.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessor.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorMockTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessorTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/resource/ResourceHttpRequestHandlerIntegrationTests.java",
-     "status": "M"
-    }
-   ],
-   "primary_files": [
-    "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessor.java"
-   ],
-   "test_command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava :spring-webflux:test --tests org.springframework.web.reactive.DispatcherHandlerErrorTests --tests org.springframework.web.reactive.result.method.annotation.RequestMappingExceptionHandlingIntegrationTests --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerIntegrationTests",
-   "test_overlay": [
-    "spring-webflux/src/test/java/org/springframework/web/reactive/DispatcherHandlerErrorTests.java",
-    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/RequestMappingExceptionHandlingIntegrationTests.java",
-    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandlerTests.java",
-    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandlerTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorMockTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessorTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/resource/ResourceHttpRequestHandlerIntegrationTests.java"
-   ],
-   "allowed_commands": [
-    {
-     "prefix": "./gradlew",
-     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
-    }
-   ],
-   "test_timeout_s": 1800,
-   "strata": {
-    "files": 13,
-    "files_by_kind": {
-     "code": 4,
-     "tests": 7,
-     "docs": 2
-    },
-    "code_modules": 2,
-    "comment_only": 0,
-    "modules": [
-     "framework-docs",
-     "spring-webflux",
-     "spring-webmvc"
-    ],
-    "docs": true,
-    "size": "L"
-   }
-  },
-  {
    "id": "spel-parser-configuration-builder",
    "repo": "spring-spel-parser-configuration-builder",
    "type": "edit",
@@ -577,77 +426,6 @@
      "framework-docs",
      "spring-context",
      "spring-expression"
-    ],
-    "docs": true,
-    "size": "M"
-   }
-  },
-  {
-   "id": "form-converter-map-payloads",
-   "repo": "spring-form-converter-map-payloads",
-   "type": "edit",
-   "answer_kind": "diff",
-   "question": "FormHttpMessageConverter only reads and writes URL-encoded forms as a MultiValueMap, so a plain Map<String, String> (for example one created with Map.of(...)) cannot be used as a form body. FormHttpMessageConverter should support any Map for reading and writing application/x-www-form-urlencoded content. To allow this, the converter is declared as a SmartHttpMessageConverter<Object> instead of being typed to MultiValueMap<String, String>: read(...) returns Object, and write(...) accepts an Object that must be a Map. When the target type is not a MultiValueMap, reading returns a single-value Map that keeps only the first value for each key. canRead and canWrite accept Map, MultiValueMap and their implementations, with or without generics. Both methods only match a media type that one of the supported media types includes, so canWrite no longer accepts a wildcard such as */*. Writing a plain Map serializes each entry as name=value in the map's iteration order.",
-   "rationale": "The commit widens FormHttpMessageConverter from MultiValueMap<String,String> to Object so Map payloads can be read and written, and makes canWrite use includes() like canRead. The primary file is the converter. Dependents are the call sites that now need a cast on read(...): FormContentFilter (spring-web), ContentRequestMatchers and AbstractMockHttpServletRequestBuilder (spring-test), plus the message-converters AsciiDoc page.",
-   "source": {
-    "commit": "ab8de8ec4b004e80979af6e4391e28a8a5da4f8e",
-    "subject": "Support Map payloads in FormHttpMessageConverter",
-    "date": "2026-03-26",
-    "issue": "gh-36408"
-   },
-   "gold_files": [
-    {
-     "path": "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/web/client/match/ContentRequestMatchers.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/web/servlet/request/AbstractMockHttpServletRequestBuilder.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-web/src/main/java/org/springframework/http/converter/FormHttpMessageConverter.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-web/src/main/java/org/springframework/web/filter/FormContentFilter.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java",
-     "status": "M"
-    }
-   ],
-   "primary_files": [
-    "spring-web/src/main/java/org/springframework/http/converter/FormHttpMessageConverter.java"
-   ],
-   "test_command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-test:compileJava :spring-test:compileTestJava :spring-web:compileJava :spring-web:compileTestJava :spring-web:test --tests org.springframework.http.converter.FormHttpMessageConverterTests",
-   "test_overlay": [
-    "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java"
-   ],
-   "allowed_commands": [
-    {
-     "prefix": "./gradlew",
-     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
-    }
-   ],
-   "test_timeout_s": 1800,
-   "strata": {
-    "files": 6,
-    "files_by_kind": {
-     "code": 4,
-     "tests": 1,
-     "docs": 1
-    },
-    "code_modules": 2,
-    "comment_only": 0,
-    "modules": [
-     "framework-docs",
-     "spring-test",
-     "spring-web"
     ],
     "docs": true,
     "size": "M"

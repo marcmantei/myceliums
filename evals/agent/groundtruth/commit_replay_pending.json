@@ -1,19 +1,11 @@
 {
- "note": "Offline prechecks of 23 November 2026 that stopped at artifacts missing from the Gradle cache; only the first failing resolution of each build, so more may be missing. Repositories the builds declare: Maven Central, https://repo.spring.io/milestone and /snapshot (snapshots), the Gradle plugin portal (plugins).",
+ "note": "Offline prechecks of 23 and 24 November 2026 that stopped at artifacts missing from the Gradle cache; only the first failing resolution of each build, so more may be missing. Repositories the builds declare: Maven Central, https://repo.spring.io/milestone and /snapshot (snapshots), the Gradle plugin portal (plugins).",
  "pending": {
   "observation-record-handled-exception": {
    "gradle": "9.9.0",
    "missing": [
     "io.micrometer:micrometer-jakarta9:1.18.0-SNAPSHOT",
     "jakarta.jms:jakarta.jms-api:3.1.0"
-   ]
-  },
-  "spel-big-power-result-limit": {
-   "gradle": "9.7.0",
-   "missing": [
-    "io.micrometer:context-propagation:",
-    "io.micrometer:micrometer-bom:1.18.0-INTERNAL-SNAPSHOT",
-    "io.projectreactor:reactor-bom:2026.0.0-INTERNAL-SNAPSHOT"
    ]
   },
   "jsonl-media-type-support": {
@@ -89,6 +81,20 @@
     "org.eclipse.jetty:jetty-bom:12.1.5",
     "org.mockito:mockito-bom:5.21.0",
     "tools.jackson:jackson-bom:3.0.3"
+   ]
+  },
+  "form-converter-map-payloads": {
+   "gradle": "9.4.1",
+   "missing": [
+    "com.google.protobuf:protobuf-java-util:4.34.1",
+    "org.apache.tomcat.embed:tomcat-embed-core:11.0.20",
+    "org.jetbrains.kotlin:kotlin-stdlib:2.2.0"
+   ]
+  },
+  "test-context-cache-pause-mode": {
+   "gradle": "9.2.1",
+   "missing": [
+    "io.spring.nullability:io.spring.nullability.gradle.plugin:0.0.9"
    ]
   }
  }

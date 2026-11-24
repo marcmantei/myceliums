@@ -331,18 +331,52 @@ class Isolation(unittest.TestCase):
     def test_a_session_does_not_start_where_its_builds_would_fail(self):
         from aeval import isolation
         top = self.root.parent.parent
-        g, home = top / "gh", top / "jdk4"
-        (g / "daemon/9").mkdir(parents=True)
+        home = top / "jdk4"
         (home / "bin").mkdir(parents=True)
         (home / "bin/java").write_bytes(b"\xcf\xfa binary")
-        env = {"GRADLE_USER_HOME": str(g), "JAVA_HOME": str(home)}
+        env = {"JAVA_HOME": str(home)}
         self.assertIn("make_jdk_ipv4", isolation.problem(env))
         (home / "bin/java").write_text(f'#!/bin/sh\nexec x {isolation.IPV4} "$@"\n')
-        self.assertIsNone(isolation.problem(env))
-        for n in range(3):
-            (g / f"daemon/9/daemon-{n}.out.log").write_text("x")
-        with mock.patch.object(isolation, "MAX_CLOSED", 2):
-            self.assertIn("3 build scans", isolation.problem(env))
+        with mock.patch.dict(os.environ, {"AEVAL_GRADLE_RO": str(top / "ro")}):
+            self.assertIn("gradle-cache", isolation.problem(env))
+            src = top / "ug/caches"
+            for f in ("modules-2/files-2.1/a.jar", "modules-2/modules-2.lock", "modules-2/gc.properties", "9.9.0/javaCompile/x",
+                      "build-cache-1/y"):
+                (src / f).parent.mkdir(parents=True, exist_ok=True)
+                (src / f).write_text("x")
+            self.assertEqual(isolation.freeze_dependencies(src, isolation.dependency_cache())["files"], 1)
+            self.assertIsNone(isolation.problem(env))
+            with self.assertRaises(SystemExit):
+                isolation.freeze_dependencies(src, isolation.dependency_cache())
+
+    def test_every_session_and_grading_has_its_own_gradle_home(self):
+        from aeval import isolation
+        top = self.root.parent.parent
+        user = top / "user/.gradle"
+        dist = user / "wrapper/dists/gradle-9.9.0-bin/abc"
+        (dist / "gradle-9.9.0/bin").mkdir(parents=True)
+        (dist / "gradle-9.9.0/bin/gradle").write_text("x")
+        for f in ("gradle-9.9.0-bin.zip", "gradle-9.9.0-bin.zip.ok", "gradle-9.9.0-bin.zip.lck"):
+            (dist / f).write_text("")
+        (user / "wrapper/dists/gradle-9.1-bin/def").mkdir(parents=True)  # incomplete: not offered
+        for f in ("daemon/9/daemon-1.out.log", "build-scan-data/spool/a.scan", "caches/9.9.0/javaCompile/x", "init.d/x.gradle"):
+            (user / f).parent.mkdir(parents=True, exist_ok=True)
+            (user / f).write_text("secret")
+        tmp = top / "s1"
+        tmp.mkdir()
+        with mock.patch.object(isolation, "user_gradle_home", lambda: user):
+            session, grading = isolation.session_environment(tmp), isolation.session_environment(tmp, "gg")
+            self.assertNotEqual(session["GRADLE_USER_HOME"], grading["GRADLE_USER_HOME"])
+            home = Path(session["GRADLE_USER_HOME"])
+            self.assertEqual({str(p.relative_to(home)) for p in home.rglob("*") if not p.is_dir() or p.is_symlink()},
+                             {"wrapper/dists/gradle-9.9.0-bin/abc/gradle-9.9.0", "wrapper/dists/gradle-9.9.0-bin/abc/gradle-9.9.0-bin.zip.ok"})
+            rw, ro = isolation.readable(tmp, self.root, session, [])
+            self.assertIn(Path(os.path.realpath(home)), rw)
+            self.assertNotIn(Path(os.path.realpath(tmp / "gg")), rw + ro)
+            self.assertFalse([p for p in rw if p == user or user in p.parents])
+            self.assertEqual([p for p in ro if user in p.parents], [user / "wrapper/dists"])
+        config.remove_tree(tmp, top)  # a link is removed, not what it names
+        self.assertTrue((dist / "gradle-9.9.0/bin/gradle").exists())
 
     def test_arms_differ_only_in_search(self):
         only_search = ["grep -rn 'String foo(' spring-core", "grep -rn \"a/b\" . | head -5", "grep -n '/users' a.java", "rg -n x spring-core",
@@ -420,32 +454,14 @@ class Isolation(unittest.TestCase):
         home = os.path.realpath(Path.home())
         for closed in (home, "/private/tmp", "/private/var/folders", "/Users/Shared", "/Volumes", f"{home}/Library/Keychains",
                        f"{home}/.claude/projects", f"{home}/.claude/history.jsonl", f"{home}/.claude/.credentials.json",
-                       f"/private/tmp/claude-{os.getuid()}", f"{home}/.gradle/caches/build-cache-1"):
+                       f"/private/tmp/claude-{os.getuid()}"):
             self.assertIn(closed, fs["denyRead"])
         self.assertFalse([p for p in fs["denyRead"] if "gold" in p or "spring-history" in p or "myceliums" in p],
                          "the model is shown this list")
         for p in (".claude", ".mcp.json", "gradle/wrapper", "gradlew", ".git/hooks", ".git/config"):
             self.assertIn(os.path.realpath(self.root) + "/" + p, fs["denyWrite"])
-        for p in ("init.d", "gradle.properties"):
-            self.assertIn(f"{home}/.gradle/{p}", fs["denyWrite"])
-        self.assertNotIn(f"{home}/.gradle/wrapper", fs["denyWrite"])  # the wrapper's lock file must stay writable
-        g = top / "gh"
-        (g / "build-scan-data/spool").mkdir(parents=True)
-        (g / "build-scan-data/spool/old.scan").write_text("x")
-        (g / "daemon/9").mkdir(parents=True)
-        for f in ("daemon-1.out.log", "registry.bin"):
-            (g / "daemon/9" / f).write_text("x")
-        self.assertEqual(isolation.earlier_output({"GRADLE_USER_HOME": str(g)}),
-                         [str(g / "build-scan-data/spool/old.scan"), str(g / "daemon/9/daemon-1.out.log")])
-        self.assertIn(str(g / "build-scan-data/spool/old.scan"), isolation.never({"GRADLE_USER_HOME": str(g)}))
-        dist = g / "wrapper/dists/gradle-9/abc/gradle-9.9.0"
-        (dist / "bin").mkdir(parents=True)
-        for f in ("x.zip", "x.zip.ok", "x.zip.lck"):
-            (dist.parent / f).write_text("")
-        denied_w = isolation.gradle_unwritable({"GRADLE_USER_HOME": str(g)})
-        self.assertIn(os.path.realpath(dist), [os.path.realpath(x) for x in denied_w])
-        self.assertIn("x.zip.ok", [Path(x).name for x in denied_w])
-        self.assertNotIn("x.zip.lck", [Path(x).name for x in denied_w])
+        self.assertFalse([p for p in fs["allowWrite"] if ".gradle" in p])
+        self.assertEqual([p for p in fs["allowRead"] if ".gradle" in p], [f"{home}/.gradle/wrapper/dists"])
         for wide in (home, "/", "/private/tmp", f"{home}/.cache", f"{home}/.claude", f"{home}/Library"):
             self.assertNotIn(wide, fs["allowRead"] + fs["allowWrite"])
         self.assertTrue(st["permissions"]["blockReadsOutsideWorkingDirectories"] and st["permissions"]["blockWritesOutsideWorkingDirectories"])
@@ -519,7 +535,7 @@ class Isolation(unittest.TestCase):
         # The real one: whole regions, no keychain, no myceliums.
         with mock.patch.dict(os.environ, {"AEVAL_CACHE": str(top / "cache")}):
             text = isolation.grading_profile(top, self.root, {"JAVA_HOME": str(top / "jdk")})
-        for needed in ("Library/Keychains", "(deny network-outbound)", 'remote ip "localhost:*"', "com.apple.SecurityServer", "build-cache-1"):
+        for needed in ("Library/Keychains", "(deny network-outbound)", 'remote ip "localhost:*"', "com.apple.SecurityServer", "wrapper/dists"):
             self.assertIn(needed, text)
         self.assertNotIn("models", text.split("(deny network-outbound)")[0].split("(allow file-read-data file-read-xattr (")[-1])
 

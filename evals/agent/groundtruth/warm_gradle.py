@@ -1,7 +1,7 @@
 """One online warm-up of the Gradle cache for the commit-replay tasks (#183).
 
-    JAVA_HOME=<JDK 25> python3 -I warm_gradle.py            # list what would run, the hosts and the estimate; starts nothing
-    JAVA_HOME=<JDK 25> python3 -I warm_gradle.py --go       # run it, once, in one go
+    JAVA_HOME=<original JDK 25> python3 -I warm_gradle.py            # list what would run, the hosts and the estimate; starts nothing
+    JAVA_HOME=<original JDK 25> python3 -I warm_gradle.py --go       # run it, once, in one go
 
 The only step that needs the network. For every task without a valid offline
 precheck it puts the replayed commit's tree at ONE fixed path and runs the
@@ -13,7 +13,10 @@ wrapper itself never downloads: a build whose distribution is not complete on
 disk is skipped and named. Nothing else on the machine is changed besides
 ``~/.gradle`` and the fixed path.
 
-Afterwards: ``agent_eval.py precheck-edit --gold-runs 2`` (offline).
+With the original JDK only: the IPv4 copy (make_jdk_ipv4.py) is for offline
+builds and is refused here. Afterwards, offline and with the copy: move the old
+frozen dependencies away, ``agent_eval.py gradle-cache``, ``precheck-edit
+--gold-runs 2 --sandbox``.
 """
 
 from __future__ import annotations
@@ -30,7 +33,7 @@ sys.path.insert(0, str(EVAL))
 TASKS = EVAL / "tasks" / "tasks-commit-replay.json"
 os.environ["AEVAL_TASKS"] = str(TASKS)
 
-from aeval import config, editgrade  # noqa: E402
+from aeval import config, editgrade, isolation  # noqa: E402
 
 ROOT = Path("/private/tmp/aeval-warm")
 WORK = ROOT / "spring-framework"
@@ -59,6 +62,8 @@ def main() -> int:
     todo = [t for t in config.load_tasks() if args.all or not valid(t, repos[t["repo"]])]
     todo.sort(key=lambda t: repos[t["repo"]]["gradle"])
     env = {k: v for k, v in config.repo_env(repos[todo[0]["repo"]]).items()} if todo else {}
+    if isolation.IPV4.encode() in (Path(env.get("JAVA_HOME", "/")) / "bin" / "java").read_bytes()[:4096]:
+        raise SystemExit("JAVA_HOME is the IPv4 copy, which is for offline builds only: use the original JDK")
     # The sessions' GRADLE_OPTS without the closed proxy; one build at a time, four workers, no daemon.
     env["GRADLE_OPTS"] = " ".join(o for o in env.get("GRADLE_OPTS", "").split() if "proxy" not in o.lower())
     print(f"{len(todo)} builds, one after the other, about {len(todo) * MINUTES[0]}-{len(todo) * MINUTES[1]} minutes in all")

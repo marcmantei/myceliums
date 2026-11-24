@@ -519,7 +519,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         variant = config.VARIANTS[item.condition]
         if not isolation.available():
             raise StopRun("an isolated repository (#183) needs macOS's sandbox; not found")
-        env = config.repo_env(self.repos[item.repo])
+        env = {**config.repo_env(self.repos[item.repo]), **isolation.session_environment(tmp)}
         if problem := isolation.problem(env):
             raise StopRun(f"{item.run_id}: {problem}")
         script = tmp / "policy" / "bashcmd.py"
@@ -538,7 +538,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
     def _grading_profile(self, item: WorkItem, tmp: Path, workdir: Path) -> Path:
         path = tmp / "grading.sb"
-        path.write_text(isolation.grading_profile(tmp, workdir, config.repo_env(self.repos[item.repo])))
+        path.write_text(isolation.grading_profile(
+            tmp, workdir, {**config.repo_env(self.repos[item.repo]), **isolation.session_environment(tmp, "gg")}))
         return path
 
     def _nosearch_settings(self, tmp: Path, task: dict | None = None, hook_dir: Path | None = None) -> Path:
@@ -711,7 +712,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 apply_gold(workdir, config.gold_dir(item.repo), item.task, overlay)
             env = config.repo_env(self.repos[item.repo])
             if sandbox:
-                env.update(isolation.session_environment(sandbox.parent))
+                env.update(isolation.session_environment(sandbox.parent, "gg"))
             if problem := wrapper_problem(workdir, env):  # the agent changed the wrapper: never let it connect
                 tests = {"command": item.task["test_command"], "passed": False, "returncode": None,
                          "timed_out": False, "seconds": 0.0, "output_tail": problem, "output": problem}
